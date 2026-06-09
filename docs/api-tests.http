@@ -1,0 +1,28 @@
+### Variables
+@api_key = GV1Q19XI1KXVS19AF5GDQMMCXFP1L9L8
+@base_url = http://localhost:8080/api
+
+
+### Test 1 - Verificar conexión API
+GET {{base_url}}
+Authorization: Basic {{api_key}}:
+
+###
+
+### Test 2 - Listar productos
+GET {{base_url}}/products
+Authorization: Basic {{api_key}}:
+
+###
+
+### Test 3 - Listar categorías
+GET {{base_url}}/categories
+Authorization: Basic {{api_key}}:
+
+###
+
+### Test 4 - Listar clientes
+GET {{base_url}}/customers
+Authorization: Basic {{api_key}}:
+
+###
