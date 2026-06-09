@@ -1,8 +1,3 @@
-### Variables
-@api_key = GV1Q19XI1KXVS19AF5GDQMMCXFP1L9L8
-@base_url = http://localhost:8080/api
-
-
 ### Test 1 - Verificar conexión API
 GET {{base_url}}
 Authorization: Basic {{api_key}}:
