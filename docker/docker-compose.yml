@@ -1,6 +1,4 @@
-
 services:
-
   odoo-db:
     image: postgres:15
     container_name: stylesync-odoo-db
@@ -21,6 +19,8 @@ services:
       - odoo-db
     ports:
       - "8069:8069"
+    environment:
+      - PRESTASHOP_API_KEY=${PRESTASHOP_API_KEY}
     volumes:
       - odoo_data:/var/lib/odoo
       - ../addons:/mnt/extra-addons
