@@ -1,0 +1,79 @@
+
+services:
+
+  odoo-db:
+    image: postgres:15
+    container_name: stylesync-odoo-db
+    environment:
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: odoo123
+      POSTGRES_DB: stylesync
+    volumes:
+      - odoo_db_data:/var/lib/postgresql/data
+    networks:
+      - stylesync-net
+    restart: unless-stopped
+
+  odoo:
+    image: odoo:17
+    container_name: stylesync-odoo
+    depends_on:
+      - odoo-db
+    ports:
+      - "8069:8069"
+    volumes:
+      - odoo_data:/var/lib/odoo
+      - ../addons:/mnt/extra-addons
+      - ./odoo/config/odoo.conf:/etc/odoo/odoo.conf
+    networks:
+      - stylesync-net
+    restart: unless-stopped
+
+  prestashop-db:
+    image: mysql:8.0
+    container_name: stylesync-ps-db
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: prestashop
+      MYSQL_USER: psuser
+      MYSQL_PASSWORD: pspass123
+    volumes:
+      - ps_db_data:/var/lib/mysql
+    networks:
+      - stylesync-net
+    restart: unless-stopped
+
+  prestashop:
+    image: prestashop/prestashop:8
+    container_name: stylesync-prestashop
+    depends_on:
+      - prestashop-db
+    ports:
+      - "8080:80"
+    environment:
+      DB_SERVER: prestashop-db
+      DB_NAME: prestashop
+      DB_USER: psuser
+      DB_PASSWD: pspass123
+      PS_INSTALL_AUTO: 1
+      PS_DOMAIN: localhost:8080
+      PS_FOLDER_ADMIN: admin_stylesync
+      PS_COUNTRY: es
+      PS_LANGUAGE: es
+      ADMIN_MAIL: admin@stylesync.dev
+      ADMIN_PASSWD: Admin1234!
+    volumes:
+      - ps_data:/var/www/html
+    networks:
+      - stylesync-net
+    restart: unless-stopped
+
+networks:
+  stylesync-net:
+    driver: bridge
+
+volumes:
+  odoo_db_data:
+  odoo_data:
+  ps_db_data:
+  ps_data:

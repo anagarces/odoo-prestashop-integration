@@ -1,0 +1,29 @@
+# Variables de entorno
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+
+# Odoo
+odoo-data/
+
+# PostgreSQL
+postgres-data/
+*.sql.gz
+
+# Docker volumes
+volumes/
+data/
+
+# IDE
+.vscode/
+.idea/
+
+# Sistema
+.DS_Store
+Thumbs.db
