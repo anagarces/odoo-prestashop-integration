@@ -3,9 +3,9 @@ services:
     image: postgres:15
     container_name: stylesync-odoo-db
     environment:
-      POSTGRES_USER: odoo
-      POSTGRES_PASSWORD: odoo123
-      POSTGRES_DB: stylesync
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - odoo_db_data:/var/lib/postgresql/data
     networks:
@@ -20,7 +20,11 @@ services:
     ports:
       - "8069:8069"
     environment:
+      - HOST=odoo-db
+      - USER=${POSTGRES_USER}
+      - PASSWORD=${POSTGRES_PASSWORD}
       - PRESTASHOP_API_KEY=${PRESTASHOP_API_KEY}
+    command: odoo --db_name=${POSTGRES_DB} --admin-passwd=${ODOO_ADMIN_PASSWD}
     volumes:
       - odoo_data:/var/lib/odoo
       - ../addons:/mnt/extra-addons
@@ -33,10 +37,10 @@ services:
     image: mysql:8.0
     container_name: stylesync-ps-db
     environment:
-      MYSQL_ROOT_PASSWORD: root123
-      MYSQL_DATABASE: prestashop
-      MYSQL_USER: psuser
-      MYSQL_PASSWORD: pspass123
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - ps_db_data:/var/lib/mysql
     networks:
@@ -52,16 +56,16 @@ services:
       - "8080:80"
     environment:
       DB_SERVER: prestashop-db
-      DB_NAME: prestashop
-      DB_USER: psuser
-      DB_PASSWD: pspass123
+      DB_NAME: ${MYSQL_DATABASE}
+      DB_USER: ${MYSQL_USER}
+      DB_PASSWD: ${MYSQL_PASSWORD}
       PS_INSTALL_AUTO: 1
       PS_DOMAIN: localhost:8080
       PS_FOLDER_ADMIN: admin_stylesync
       PS_COUNTRY: es
       PS_LANGUAGE: es
-      ADMIN_MAIL: admin@stylesync.dev
-      ADMIN_PASSWD: Admin1234!
+      ADMIN_MAIL: ${PRESTASHOP_ADMIN_MAIL}
+      ADMIN_PASSWD: ${PRESTASHOP_ADMIN_PASSWD}
     volumes:
       - ps_data:/var/www/html
     networks:
