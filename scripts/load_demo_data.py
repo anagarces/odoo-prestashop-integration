@@ -9,7 +9,7 @@ from xml.dom import minidom
 from dotenv import load_dotenv
 
 # ─── Cargar Entorno ───────────────────────────────────────────
-ruta_env = os.path.join("docker", ".env")
+ruta_env = os.path.join(".env")
 load_dotenv(dotenv_path=ruta_env)
 
 # ─── Configuración ────────────────────────────────────────────

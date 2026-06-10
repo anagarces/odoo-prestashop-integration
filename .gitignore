@@ -11,6 +11,7 @@ __pycache__/
 
 # Odoo
 odoo-data/
+docker/odoo/config/odoo.conf
 
 # PostgreSQL
 postgres-data/

@@ -23,12 +23,13 @@ services:
       - HOST=odoo-db
       - USER=${POSTGRES_USER}
       - PASSWORD=${POSTGRES_PASSWORD}
+      - ADMIN_PASSWD=${ODOO_ADMIN_PASSWD}
       - PRESTASHOP_API_KEY=${PRESTASHOP_API_KEY}
-    command: odoo --db_name=${POSTGRES_DB} --admin-passwd=${ODOO_ADMIN_PASSWD}
+    #command: odoo --db_name=${POSTGRES_DB} --admin-passwd=${ODOO_ADMIN_PASSWD}
     volumes:
       - odoo_data:/var/lib/odoo
-      - ../addons:/mnt/extra-addons
-      - ./odoo/config/odoo.conf:/etc/odoo/odoo.conf
+      - ./addons:/mnt/extra-addons
+      - ./docker/odoo/config/odoo.conf:/etc/odoo/odoo.conf
     networks:
       - stylesync-net
     restart: unless-stopped
