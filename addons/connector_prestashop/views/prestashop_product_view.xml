@@ -35,13 +35,13 @@
         <field name="name">prestashop.product.list</field>
         <field name="model">prestashop.product</field>
         <field name="arch" type="xml">
-            <list string="Productos PrestaShop">
+            <tree string="Productos PrestaShop">
                 <field name="odoo_product_id"/>
                 <field name="prestashop_id"/>
                 <field name="prestashop_reference"/>
                 <field name="sync_state"/>
                 <field name="last_sync"/>
-            </list>
+            </tree>
         </field>
     </record>
 
@@ -49,7 +49,7 @@
     <record id="action_prestashop_product" model="ir.actions.act_window">
         <field name="name">Productos PrestaShop</field>
         <field name="res_model">prestashop.product</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">tree,form</field>
     </record>
 
 </odoo>

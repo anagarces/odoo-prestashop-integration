@@ -29,7 +29,7 @@ services:
     volumes:
       - odoo_data:/var/lib/odoo
       - ./addons:/mnt/extra-addons
-      - ./docker/odoo/config/odoo.conf:/etc/odoo/odoo.conf
+      # ./docker/odoo/config/odoo.conf:/etc/odoo/odoo.conf
     networks:
       - stylesync-net
     restart: unless-stopped

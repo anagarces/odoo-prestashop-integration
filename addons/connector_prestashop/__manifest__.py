@@ -22,8 +22,8 @@
     ],
     'data': [
         'security/ir.model.access.csv',
-        'views/prestashop_config_views.xml',
-        'views/prestashop_product_views.xml',
+        'views/prestashop_config_view.xml',
+        'views/prestashop_product_view.xml',
         'views/menu_views.xml',
     ],
     'installable': True,
