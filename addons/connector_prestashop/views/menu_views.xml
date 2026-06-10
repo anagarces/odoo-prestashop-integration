@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Menú principal -->
+    <menuitem id="menu_prestashop_root"
+              name="PrestaShop"
+              sequence="50"/>
+
+    <!-- Submenú Configuración -->
+    <menuitem id="menu_prestashop_config"
+              name="Configuración"
+              parent="menu_prestashop_root"
+              action="action_prestashop_config"
+              sequence="10"/>
+
+    <!-- Submenú Productos -->
+    <menuitem id="menu_prestashop_products"
+              name="Productos"
+              parent="menu_prestashop_root"
+              action="action_prestashop_product"
+              sequence="20"/>
+
+</odoo>
