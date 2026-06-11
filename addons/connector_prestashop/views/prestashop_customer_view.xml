@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_prestashop_customer_list" model="ir.ui.view">
+        <field name="name">prestashop.customer.list</field>
+        <field name="model">prestashop.customer</field>
+        <field name="arch" type="xml">
+            <tree string="Clientes PrestaShop"
+                  decoration-success="sync_state == 'synced'"
+                  decoration-danger="sync_state == 'error'">
+                <field name="prestashop_id" string="ID PS"/>
+                <field name="odoo_partner_id"/>
+                <field name="config_id"/>
+                <field name="sync_state"/>
+                <field name="last_sync"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_prestashop_customer_form" model="ir.ui.view">
+        <field name="name">prestashop.customer.form</field>
+        <field name="model">prestashop.customer</field>
+        <field name="arch" type="xml">
+            <form string="Cliente PrestaShop">
+                <sheet>
+                    <group string="Cliente">
+                        <field name="prestashop_id"/>
+                        <field name="odoo_partner_id"/>
+                        <field name="config_id"/>
+                    </group>
+                    <group string="Sincronización">
+                        <field name="sync_state"/>
+                        <field name="last_sync"/>
+                        <field name="sync_message"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_prestashop_customer" model="ir.actions.act_window">
+        <field name="name">Clientes PrestaShop</field>
+        <field name="res_model">prestashop.customer</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+</odoo>

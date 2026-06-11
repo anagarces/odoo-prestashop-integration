@@ -84,6 +84,80 @@ class PrestashopConfig(models.Model):
             )
         return config
 
+    def action_import_customers(self):
+        """Importa todos los clientes de PrestaShop hacia Odoo."""
+        self.ensure_one()
+        response = self.prestashop_get('customers')
+        root = self.prestashop_parse_xml(response.text)
+        customer_ids = [
+            int(el.get('id'))
+            for el in root.findall('.//customer')
+            if el.get('id')
+        ]
+
+        imported, errors = 0, 0
+        for ps_id in customer_ids:
+            try:
+                self.env['prestashop.customer'].import_customer(self, ps_id)
+                imported += 1
+            except Exception as exc:
+                _logger.error('Error importando cliente PS %s: %s', ps_id, exc)
+                errors += 1
+
+        msg = f'{imported} cliente(s) importado(s).'
+        if errors:
+            msg += f' {errors} con error (ver log).'
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Importación de clientes',
+                'message': msg,
+                'type': 'warning' if errors else 'success',
+                'sticky': False,
+            },
+        }
+
+    def action_import_orders(self):
+        """Importa pedidos de PrestaShop hacia Odoo desde la última sincronización."""
+        self.ensure_one()
+        params = {'sort': '[id_ASC]'}
+        if self.last_sync:
+            date_str = self.last_sync.strftime('%Y-%m-%d %H:%M:%S')
+            params['filter[date_upd]'] = f'[{date_str},]'
+
+        response = self.prestashop_get('orders', params=params)
+        root = self.prestashop_parse_xml(response.text)
+        order_ids = [
+            int(el.get('id'))
+            for el in root.findall('.//order')
+            if el.get('id')
+        ]
+
+        imported, errors = 0, 0
+        for ps_id in order_ids:
+            try:
+                self.env['prestashop.order'].import_order(self, ps_id)
+                imported += 1
+            except Exception as exc:
+                _logger.error('Error importando pedido PS %s: %s', ps_id, exc)
+                errors += 1
+
+        self.last_sync = fields.Datetime.now()
+        msg = f'{imported} pedido(s) importado(s).'
+        if errors:
+            msg += f' {errors} con error (ver log).'
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Importación de pedidos',
+                'message': msg,
+                'type': 'warning' if errors else 'success',
+                'sticky': False,
+            },
+        }
+
     def test_connection(self):
         """Prueba la conexión con PrestaShop y detecta el idioma por defecto."""
         self.ensure_one()

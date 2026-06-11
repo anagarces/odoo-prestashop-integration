@@ -27,4 +27,18 @@
               action="action_prestashop_product"
               sequence="20"/>
 
+    <!-- Submenú Clientes -->
+    <menuitem id="menu_prestashop_customers"
+              name="Clientes"
+              parent="menu_prestashop_root"
+              action="action_prestashop_customer"
+              sequence="25"/>
+
+    <!-- Submenú Pedidos -->
+    <menuitem id="menu_prestashop_orders"
+              name="Pedidos"
+              parent="menu_prestashop_root"
+              action="action_prestashop_order"
+              sequence="30"/>
+
 </odoo>

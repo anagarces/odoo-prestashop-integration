@@ -12,6 +12,15 @@
                             string="Probar Conexión"
                             type="object"
                             class="btn-primary"/>
+                    <button name="action_import_customers"
+                            string="Importar Clientes"
+                            type="object"
+                            invisible="state != 'connected'"/>
+                    <button name="action_import_orders"
+                            string="Importar Pedidos"
+                            type="object"
+                            class="btn-primary"
+                            invisible="state != 'connected'"/>
                     <field name="state" widget="statusbar"/>
                 </header>
                 <sheet>
