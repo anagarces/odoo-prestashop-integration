@@ -23,8 +23,7 @@ class PrestashopConfig(models.Model):
         default=lambda self: os.environ.get('PRESTASHOP_URL', 'http://host.docker.internal:8080'),
         help=(
             'URL base de la tienda. '
-            'Desde Docker use http://prestashop. '
-            'Desde el host use http://localhost:8080'
+            'Desde Docker Desktop use http://host.docker.internal:8080'
         )
     )
     api_key = fields.Char(
@@ -81,32 +80,36 @@ class PrestashopConfig(models.Model):
         return config
 
     def action_import_customers(self):
-        """Importa clientes de PrestaShop hacia Odoo desde la última sincronización."""
-        self.ensure_one()
-        params = {'sort': '[id_ASC]'}
-        if self.last_customer_sync:
-            date_str = self.last_customer_sync.strftime('%Y-%m-%d %H:%M:%S')
-            params['filter[date_upd]'] = f'[{date_str},]'
+        """Importa clientes nuevos de PrestaShop hacia Odoo.
 
-        response = self.prestashop_get('customers', params=params)
+        El endpoint /customers de PS no soporta filter[date_upd], por lo que
+        se obtiene la lista completa de IDs y se filtra localmente: solo se
+        importan aquellos sin binding existente en Odoo.
+        """
+        self.ensure_one()
+        response = self.prestashop_get('customers', params={'sort': '[id_ASC]'})
         root = self.prestashop_parse_xml(response.text)
-        customer_ids = [
+        all_ps_ids = [
             int(el.get('id'))
             for el in root.findall('.//customer')
             if el.get('id')
         ]
 
-        created, updated, errors = 0, 0, 0
-        for ps_id in customer_ids:
-            is_new = not self.env['prestashop.customer'].search(
-                [('config_id', '=', self.id), ('prestashop_id', '=', ps_id)], limit=1
-            )
+        # IDs ya vinculados — consulta batch (una sola query)
+        existing_ps_ids = set(
+            self.env['prestashop.customer']
+            .search([('config_id', '=', self.id)])
+            .mapped('prestashop_id')
+        )
+
+        new_ids = [ps_id for ps_id in all_ps_ids if ps_id not in existing_ps_ids]
+        skipped = len(all_ps_ids) - len(new_ids)
+
+        created, errors = 0, 0
+        for ps_id in new_ids:
             try:
                 self.env['prestashop.customer'].import_customer(self, ps_id)
-                if is_new:
-                    created += 1
-                else:
-                    updated += 1
+                created += 1
             except Exception as exc:
                 _logger.error('Error importando cliente PS %s: %s', ps_id, exc)
                 errors += 1
@@ -116,9 +119,9 @@ class PrestashopConfig(models.Model):
         parts = []
         if created:
             parts.append(f'{created} nuevo(s)')
-        if updated:
-            parts.append(f'{updated} actualizado(s)')
-        if not parts:
+        if skipped:
+            parts.append(f'{skipped} ya importado(s)')
+        if not created and not skipped:
             parts.append('sin cambios')
         msg = ', '.join(parts) + '.'
         if errors:
