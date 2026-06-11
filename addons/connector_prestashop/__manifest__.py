@@ -13,6 +13,7 @@
         - Sincronizar stock en tiempo real
     """,
     'author': 'StyleSync',
+    'license': 'LGPL-3',
     'depends': [
         'base',
         'product',
