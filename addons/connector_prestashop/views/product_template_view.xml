@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_product_template_form_prestashop" model="ir.ui.view">
+        <field name="name">product.template.form.prestashop</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="before">
+                <header>
+                    <button name="action_sync_to_prestashop"
+                            string="Sincronizar a PrestaShop"
+                            type="object"
+                            class="oe_highlight"/>
+                </header>
+            </xpath>
+            <xpath expr="//notebook" position="inside">
+                <page string="PrestaShop" name="prestashop">
+                    <group>
+                        <field name="prestashop_sync_state"/>
+                    </group>
+                    <field name="prestashop_binding_ids" readonly="1">
+                        <tree>
+                            <field name="config_id"/>
+                            <field name="prestashop_id"/>
+                            <field name="prestashop_reference"/>
+                            <field name="sync_state"/>
+                            <field name="last_sync"/>
+                        </tree>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

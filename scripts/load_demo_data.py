@@ -9,7 +9,8 @@ from xml.dom import minidom
 from dotenv import load_dotenv
 
 # ─── Cargar Entorno ───────────────────────────────────────────
-ruta_env = os.path.join(".env")
+# Busca .env en la raíz del proyecto (un nivel arriba de /scripts)
+ruta_env = os.path.join(os.path.dirname(__file__), "..", ".env")
 load_dotenv(dotenv_path=ruta_env)
 
 # ─── Configuración ────────────────────────────────────────────
@@ -21,7 +22,7 @@ HEADERS   = {"Content-Type": "application/xml"}
 # Verificación de seguridad
 if not API_KEY:
     print("ERROR: No se encontró la variable PRESTASHOP_API_KEY.")
-    print("   Asegúrate de que el archivo .env exista dentro de la carpeta 'docker'.")
+    print("   Asegúrate de que el archivo .env exista en la raíz del proyecto.")
     exit(1)
 
 # ─── Helpers ──────────────────────────────────────────────────
