@@ -23,10 +23,13 @@
     'data': [
         'security/ir.model.access.csv',
         'views/prestashop_config_view.xml',
+        'views/prestashop_category_view.xml',
         'views/prestashop_product_view.xml',
+        'views/product_template_view.xml',
         'views/menu_views.xml',
     ],
     'installable': True,
     'application': True,
     'auto_install': False,
+    'post_init_hook': 'post_init_hook',
 }

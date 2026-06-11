@@ -1,3 +1,10 @@
+# PrestaShop API — pruebas manuales
+# Host (scripts locales):  http://localhost:8080/api
+# Docker (desde Odoo):     http://prestashop/api
+#
+# @base_url = http://localhost:8080/api
+# @api_key  = tu_api_key
+
 ### Test 1 - Verificar conexión API
 GET {{base_url}}
 Authorization: Basic {{api_key}}:

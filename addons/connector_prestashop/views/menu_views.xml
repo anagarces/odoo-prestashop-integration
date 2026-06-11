@@ -13,6 +13,13 @@
               action="action_prestashop_config"
               sequence="10"/>
 
+    <!-- Submenú Categorías -->
+    <menuitem id="menu_prestashop_categories"
+              name="Categorías"
+              parent="menu_prestashop_root"
+              action="action_prestashop_category"
+              sequence="15"/>
+
     <!-- Submenú Productos -->
     <menuitem id="menu_prestashop_products"
               name="Productos"

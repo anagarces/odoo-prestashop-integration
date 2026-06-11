@@ -10,13 +10,21 @@ services:
       - odoo_db_data:/var/lib/postgresql/data
     networks:
       - stylesync-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
 
   odoo:
     image: odoo:17
     container_name: stylesync-odoo
     depends_on:
-      - odoo-db
+      odoo-db:
+        condition: service_healthy
+      prestashop:
+        condition: service_started
     ports:
       - "8069:8069"
     environment:
@@ -25,11 +33,14 @@ services:
       - PASSWORD=${POSTGRES_PASSWORD}
       - ADMIN_PASSWD=${ODOO_ADMIN_PASSWD}
       - PRESTASHOP_API_KEY=${PRESTASHOP_API_KEY}
-    #command: odoo --db_name=${POSTGRES_DB} --admin-passwd=${ODOO_ADMIN_PASSWD}
+      - PRESTASHOP_URL=http://prestashop
+    command: >
+      odoo
+      -d ${POSTGRES_DB}
+      --db-filter=^${POSTGRES_DB}$$
     volumes:
       - odoo_data:/var/lib/odoo
       - ./addons:/mnt/extra-addons
-      # ./docker/odoo/config/odoo.conf:/etc/odoo/odoo.conf
     networks:
       - stylesync-net
     restart: unless-stopped
@@ -46,13 +57,20 @@ services:
       - ps_db_data:/var/lib/mysql
     networks:
       - stylesync-net
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
     restart: unless-stopped
 
   prestashop:
     image: prestashop/prestashop:8
     container_name: stylesync-prestashop
     depends_on:
-      - prestashop-db
+      prestashop-db:
+        condition: service_healthy
     ports:
       - "8080:80"
     environment:

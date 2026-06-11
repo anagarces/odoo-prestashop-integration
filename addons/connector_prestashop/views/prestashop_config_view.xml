@@ -17,11 +17,13 @@
                 <sheet>
                     <group string="Conexión">
                         <field name="name"/>
-                        <field name="url" placeholder="http://localhost:8080"/>
+                        <field name="url" placeholder="http://prestashop"/>
                         <field name="api_key" password="True"/>
                         <field name="active"/>
                     </group>
-                    <group string="Información">
+                    <group string="Sincronización">
+                        <field name="default_lang_id"/>
+                        <field name="default_category_ps_id"/>
                         <field name="last_sync"/>
                     </group>
                 </sheet>

@@ -1,0 +1,19 @@
+[options]
+; Plantilla de configuración Odoo para Docker.
+; Copia este archivo como odoo.conf y rellena los valores desde tu .env.
+; El archivo odoo.conf real está en .gitignore y nunca se sube al repositorio.
+
+addons_path = /mnt/extra-addons,/usr/lib/python3/dist-packages/odoo/addons
+data_dir = /var/lib/odoo
+
+db_host = odoo-db
+db_port = 5432
+db_user = <POSTGRES_USER>
+db_password = <POSTGRES_PASSWORD>
+
+; Base de datos por defecto (también se pasa por command en docker-compose)
+; db_name = <POSTGRES_DB>
+
+admin_passwd = <ODOO_ADMIN_PASSWD>
+list_db = False
+dbfilter = ^<POSTGRES_DB>$

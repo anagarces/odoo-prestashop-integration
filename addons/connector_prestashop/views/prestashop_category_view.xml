@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_prestashop_category_form" model="ir.ui.view">
+        <field name="name">prestashop.category.form</field>
+        <field name="model">prestashop.category</field>
+        <field name="arch" type="xml">
+            <form string="Categoría PrestaShop">
+                <header>
+                    <button name="sync_to_prestashop"
+                            string="Sincronizar a PrestaShop"
+                            type="object"
+                            class="btn-primary"/>
+                    <field name="sync_state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <group string="Categoría">
+                        <field name="odoo_category_id"/>
+                        <field name="config_id"/>
+                    </group>
+                    <group string="PrestaShop">
+                        <field name="prestashop_id"/>
+                        <field name="last_sync"/>
+                        <field name="sync_message"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_prestashop_category_list" model="ir.ui.view">
+        <field name="name">prestashop.category.list</field>
+        <field name="model">prestashop.category</field>
+        <field name="arch" type="xml">
+            <tree string="Categorías PrestaShop">
+                <field name="odoo_category_id"/>
+                <field name="prestashop_id"/>
+                <field name="sync_state"/>
+                <field name="last_sync"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="action_prestashop_category" model="ir.actions.act_window">
+        <field name="name">Categorías PrestaShop</field>
+        <field name="res_model">prestashop.category</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+</odoo>
