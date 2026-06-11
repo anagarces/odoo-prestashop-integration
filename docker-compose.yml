@@ -79,7 +79,7 @@ services:
       DB_USER: ${MYSQL_USER}
       DB_PASSWD: ${MYSQL_PASSWORD}
       PS_INSTALL_AUTO: 1
-      PS_DOMAIN: localhost:8080
+      PS_DOMAIN: host.docker.internal:8080
       PS_FOLDER_ADMIN: admin_stylesync
       PS_COUNTRY: es
       PS_LANGUAGE: es

@@ -20,7 +20,7 @@ class PrestashopConfig(models.Model):
     url = fields.Char(
         string='URL de PrestaShop',
         required=True,
-        default=lambda self: os.environ.get('PRESTASHOP_URL', 'http://prestashop'),
+        default=lambda self: os.environ.get('PRESTASHOP_URL', 'http://host.docker.internal:8080'),
         help=(
             'URL base de la tienda. '
             'Desde Docker use http://prestashop. '
