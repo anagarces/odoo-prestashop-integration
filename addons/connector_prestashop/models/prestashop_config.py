@@ -57,9 +57,13 @@ class PrestashopConfig(models.Model):
         default=2,
         help='ID de categoría en PrestaShop cuando el producto no tiene mapeo (2 = Inicio)'
     )
+    last_customer_sync = fields.Datetime(
+        string='Última sync clientes',
+        readonly=True,
+    )
     last_sync = fields.Datetime(
-        string='Última sincronización',
-        readonly=True
+        string='Última sync pedidos',
+        readonly=True,
     )
 
     @api.model
@@ -77,9 +81,14 @@ class PrestashopConfig(models.Model):
         return config
 
     def action_import_customers(self):
-        """Importa todos los clientes de PrestaShop hacia Odoo."""
+        """Importa clientes de PrestaShop hacia Odoo desde la última sincronización."""
         self.ensure_one()
-        response = self.prestashop_get('customers')
+        params = {'sort': '[id_ASC]'}
+        if self.last_customer_sync:
+            date_str = self.last_customer_sync.strftime('%Y-%m-%d %H:%M:%S')
+            params['filter[date_upd]'] = f'[{date_str},]'
+
+        response = self.prestashop_get('customers', params=params)
         root = self.prestashop_parse_xml(response.text)
         customer_ids = [
             int(el.get('id'))
@@ -87,16 +96,31 @@ class PrestashopConfig(models.Model):
             if el.get('id')
         ]
 
-        imported, errors = 0, 0
+        created, updated, errors = 0, 0, 0
         for ps_id in customer_ids:
+            is_new = not self.env['prestashop.customer'].search(
+                [('config_id', '=', self.id), ('prestashop_id', '=', ps_id)], limit=1
+            )
             try:
                 self.env['prestashop.customer'].import_customer(self, ps_id)
-                imported += 1
+                if is_new:
+                    created += 1
+                else:
+                    updated += 1
             except Exception as exc:
                 _logger.error('Error importando cliente PS %s: %s', ps_id, exc)
                 errors += 1
 
-        msg = f'{imported} cliente(s) importado(s).'
+        self.last_customer_sync = fields.Datetime.now()
+
+        parts = []
+        if created:
+            parts.append(f'{created} nuevo(s)')
+        if updated:
+            parts.append(f'{updated} actualizado(s)')
+        if not parts:
+            parts.append('sin cambios')
+        msg = ', '.join(parts) + '.'
         if errors:
             msg += f' {errors} con error (ver log).'
         return {
@@ -126,17 +150,27 @@ class PrestashopConfig(models.Model):
             if el.get('id')
         ]
 
-        imported, errors = 0, 0
+        imported, skipped, errors = 0, 0, 0
         for ps_id in order_ids:
             try:
-                self.env['prestashop.order'].import_order(self, ps_id)
-                imported += 1
+                result = self.env['prestashop.order'].import_order(self, ps_id)
+                if result:
+                    imported += 1
+                else:
+                    skipped += 1
             except Exception as exc:
                 _logger.error('Error importando pedido PS %s: %s', ps_id, exc)
                 errors += 1
 
         self.last_sync = fields.Datetime.now()
-        msg = f'{imported} pedido(s) importado(s).'
+        parts = []
+        if imported:
+            parts.append(f'{imported} nuevo(s)')
+        if skipped:
+            parts.append(f'{skipped} ya existente(s)')
+        if not parts:
+            parts.append('sin cambios')
+        msg = ', '.join(parts) + '.'
         if errors:
             msg += f' {errors} con error (ver log).'
         return {
