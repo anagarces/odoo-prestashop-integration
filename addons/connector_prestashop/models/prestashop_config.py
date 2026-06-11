@@ -7,14 +7,6 @@ from odoo.exceptions import UserError
 _logger = logging.getLogger(__name__)
 
 
-def _default_prestashop_url():
-    return os.environ.get('PRESTASHOP_URL', 'http://prestashop')
-
-
-def _default_prestashop_api_key():
-    return os.environ.get('PRESTASHOP_API_KEY', '')
-
-
 class PrestashopConfig(models.Model):
     _name = 'prestashop.config'
     _inherit = ['prestashop.api.mixin']
@@ -28,7 +20,7 @@ class PrestashopConfig(models.Model):
     url = fields.Char(
         string='URL de PrestaShop',
         required=True,
-        default=_default_prestashop_url,
+        default=lambda self: os.environ.get('PRESTASHOP_URL', 'http://prestashop'),
         help=(
             'URL base de la tienda. '
             'Desde Docker use http://prestashop. '
@@ -38,7 +30,7 @@ class PrestashopConfig(models.Model):
     api_key = fields.Char(
         string='API Key',
         required=True,
-        default=_default_prestashop_api_key,
+        default=lambda self: os.environ.get('PRESTASHOP_API_KEY', ''),
         help='Clave generada en PrestaShop → Parámetros Avanzados → Webservice'
     )
     active = fields.Boolean(
