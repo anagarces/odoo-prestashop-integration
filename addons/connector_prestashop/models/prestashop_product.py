@@ -72,14 +72,17 @@ class PrestashopProduct(models.Model):
         description = product.description_sale or name
         slug = self.env['prestashop.api.mixin'].prestashop_slugify(name)
         category_id = self._get_prestashop_category_id(product, config)
+        tax_group_id = config.default_tax_rules_group_id or 1
 
         product_open = f'<product><id>{self.prestashop_id}</id>' if self.prestashop_id else '<product>'
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <prestashop>
     {product_open}
+        <state>1</state>
         <active>1</active>
         <id_category_default>{category_id}</id_category_default>
+        <id_tax_rules_group>{tax_group_id}</id_tax_rules_group>
         <price>{price:.6f}</price>
         <reference>{reference}</reference>
         <minimal_quantity>1</minimal_quantity>
@@ -140,6 +143,92 @@ class PrestashopProduct(models.Model):
 </prestashop>"""
         config.prestashop_put(f'stock_availables/{stock_id}', xml_data)
 
+    def import_product(self, config, ps_product_id):
+        """Importa un producto de PrestaShop hacia Odoo.
+
+        Retorna None si el binding ya existe (idempotente).
+        Retorna el product.template creado/encontrado si se importó correctamente.
+        Estrategia de deduplicación: busca por referencia interna (default_code) antes de crear.
+        """
+        existing = self.search([
+            ('config_id', '=', config.id),
+            ('prestashop_id', '=', ps_product_id),
+        ], limit=1)
+        if existing:
+            return None
+
+        response = config.prestashop_get(f'products/{ps_product_id}', params={'display': 'full'})
+        root = config.prestashop_parse_xml(response.text)
+        p = root.find('.//product')
+        if p is None:
+            raise UserError(f'No se encontraron datos para el producto PS {ps_product_id}.')
+
+        # Nombre: preferir idioma configurado, caer al primero disponible
+        lang_id = str(config.default_lang_id or 1)
+        name_el = (
+            p.find(f'.//name/language[@id="{lang_id}"]')
+            or p.find('.//name/language')
+        )
+        name = (name_el.text or '').strip() if name_el is not None else f'Producto PS {ps_product_id}'
+
+        reference = (p.findtext('reference') or '').strip() or None
+        price = float(p.findtext('price') or 0)
+
+        desc_el = (
+            p.find(f'.//description_short/language[@id="{lang_id}"]')
+            or p.find('.//description_short/language')
+        )
+        description = (desc_el.text or '').strip() if desc_el is not None else ''
+
+        # Categoría Odoo via binding de categoría PS
+        categ_id = (
+            self.env['product.category']
+            .search([('complete_name', '=', 'All / Saleable')], limit=1).id
+            or self.env.ref('product.product_category_all').id
+        )
+        ps_cat_text = p.findtext('id_category_default')
+        if ps_cat_text and ps_cat_text.strip().isdigit():
+            cat_binding = self.env['prestashop.category'].search([
+                ('config_id', '=', config.id),
+                ('prestashop_id', '=', int(ps_cat_text)),
+            ], limit=1)
+            if cat_binding:
+                categ_id = cat_binding.odoo_category_id.id
+
+        # Deduplicación por referencia interna → evita duplicados si el producto
+        # ya existe en Odoo con el mismo código
+        odoo_product = None
+        if reference:
+            odoo_product = self.env['product.template'].search(
+                [('default_code', '=', reference)], limit=1
+            )
+
+        if not odoo_product:
+            vals = {
+                'name': name,
+                'type': 'product',
+                'list_price': price,
+                'sale_ok': True,
+                'categ_id': categ_id,
+            }
+            if reference:
+                vals['default_code'] = reference
+            if description:
+                vals['description_sale'] = description
+            odoo_product = self.env['product.template'].create(vals)
+
+        self.create({
+            'config_id': config.id,
+            'odoo_product_id': odoo_product.id,
+            'prestashop_id': ps_product_id,
+            'prestashop_reference': reference or '',
+            'sync_state': 'synced',
+            'last_sync': fields.Datetime.now(),
+            'sync_message': f'Importado desde PS. Precio: {price}',
+        })
+        _logger.info('Producto PS %s "%s" importado → Odoo ID %s', ps_product_id, name, odoo_product.id)
+        return odoo_product
+
     def sync_to_prestashop(self):
         """Sincroniza el producto de Odoo hacia PrestaShop, incluyendo stock."""
         for record in self:
@@ -177,7 +266,7 @@ class PrestashopProduct(models.Model):
                     f'Sincronizado correctamente. PS ID: {ps_id}, stock: {quantity}'
                 ),
             })
-            config.last_sync = fields.Datetime.now()
+            config.last_products_sync = fields.Datetime.now()
             _logger.info(
                 'Producto %s sincronizado. PS ID: %s, stock: %s',
                 product.name,

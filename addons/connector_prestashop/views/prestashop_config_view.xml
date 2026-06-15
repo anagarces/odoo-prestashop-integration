@@ -12,6 +12,19 @@
                             string="Probar Conexión"
                             type="object"
                             class="btn-primary"/>
+                    <button name="action_import_categories"
+                            string="Importar Categorías"
+                            type="object"
+                            invisible="state != 'connected'"/>
+                    <button name="action_import_products"
+                            string="Importar Productos"
+                            type="object"
+                            invisible="state != 'connected'"/>
+                    <button name="action_export_products"
+                            string="Exportar Productos"
+                            type="object"
+                            class="btn-primary"
+                            invisible="state != 'connected'"/>
                     <button name="action_import_customers"
                             string="Importar Clientes"
                             type="object"
@@ -19,20 +32,23 @@
                     <button name="action_import_orders"
                             string="Importar Pedidos"
                             type="object"
-                            class="btn-primary"
                             invisible="state != 'connected'"/>
                     <field name="state" widget="statusbar"/>
                 </header>
                 <sheet>
                     <group string="Conexión">
                         <field name="name"/>
-                        <field name="url" placeholder="http://prestashop"/>
+                        <field name="url" placeholder="http://host.docker.internal:8080"/>
                         <field name="api_key" password="True"/>
                         <field name="active"/>
                     </group>
-                    <group string="Sincronización">
+                    <group string="Defaults para sincronización">
                         <field name="default_lang_id"/>
                         <field name="default_category_ps_id"/>
+                        <field name="default_tax_rules_group_id"/>
+                    </group>
+                    <group string="Última sincronización">
+                        <field name="last_products_sync"/>
                         <field name="last_customer_sync"/>
                         <field name="last_sync"/>
                     </group>

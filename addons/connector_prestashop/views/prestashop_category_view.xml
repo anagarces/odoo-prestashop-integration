@@ -5,21 +5,28 @@
         <field name="name">prestashop.category.form</field>
         <field name="model">prestashop.category</field>
         <field name="arch" type="xml">
-            <form string="Categoría PrestaShop">
+            <form string="Vínculo de Categoría">
                 <header>
                     <button name="sync_to_prestashop"
-                            string="Sincronizar a PrestaShop"
+                            string="Exportar a PrestaShop"
                             type="object"
-                            class="btn-primary"/>
+                            class="btn-primary"
+                            invisible="prestashop_id == 0"/>
                     <field name="sync_state" widget="statusbar"/>
                 </header>
                 <sheet>
-                    <group string="Categoría">
+                    <div class="alert alert-info" role="alert">
+                        Vincula una categoría de Odoo con su equivalente en PrestaShop.
+                        Para importar el árbol completo, usa <b>Configuración PrestaShop → Importar Categorías</b>.
+                        Puedes crear bindings manuales aquí si ya existen ambas categorías.
+                    </div>
+                    <group string="Vínculo">
                         <field name="odoo_category_id"/>
                         <field name="config_id"/>
+                        <field name="prestashop_id"
+                               help="ID numérico de la categoría en PrestaShop. Déjalo en 0 para exportar como nueva categoría."/>
                     </group>
-                    <group string="PrestaShop">
-                        <field name="prestashop_id"/>
+                    <group string="Estado de sincronización">
                         <field name="last_sync"/>
                         <field name="sync_message"/>
                     </group>
@@ -32,11 +39,15 @@
         <field name="name">prestashop.category.list</field>
         <field name="model">prestashop.category</field>
         <field name="arch" type="xml">
-            <tree string="Categorías PrestaShop">
+            <tree string="Categorías vinculadas a PrestaShop">
                 <field name="odoo_category_id"/>
                 <field name="prestashop_id"/>
-                <field name="sync_state"/>
+                <field name="sync_state"
+                       decoration-success="sync_state == 'synced'"
+                       decoration-danger="sync_state == 'error'"
+                       decoration-warning="sync_state == 'pending'"/>
                 <field name="last_sync"/>
+                <field name="sync_message" optional="hide"/>
             </tree>
         </field>
     </record>
