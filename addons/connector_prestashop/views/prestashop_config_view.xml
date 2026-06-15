@@ -16,6 +16,10 @@
                             string="Importar Categorías"
                             type="object"
                             invisible="state != 'connected'"/>
+                    <button name="action_import_products"
+                            string="Importar Productos"
+                            type="object"
+                            invisible="state != 'connected'"/>
                     <button name="action_export_products"
                             string="Exportar Productos"
                             type="object"

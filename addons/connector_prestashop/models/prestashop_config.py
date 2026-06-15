@@ -150,6 +150,64 @@ class PrestashopConfig(models.Model):
             },
         }
 
+    def action_import_products(self):
+        """Importa productos nuevos de PrestaShop hacia Odoo.
+
+        Obtiene todos los IDs de PS, descarta los que ya tienen binding,
+        e importa los nuevos creando product.template y prestashop.product.
+        Los productos ya vinculados se omiten (operación idempotente).
+        """
+        self.ensure_one()
+        response = self.prestashop_get('products', params={'sort': '[id_ASC]'})
+        root = self.prestashop_parse_xml(response.text)
+        all_ps_ids = [
+            int(el.get('id'))
+            for el in root.findall('.//product')
+            if el.get('id')
+        ]
+
+        existing_ps_ids = set(
+            self.env['prestashop.product']
+            .search([('config_id', '=', self.id)])
+            .mapped('prestashop_id')
+        )
+
+        new_ids = [ps_id for ps_id in all_ps_ids if ps_id not in existing_ps_ids]
+        skipped = len(all_ps_ids) - len(new_ids)
+
+        created, errors = 0, 0
+        for ps_id in new_ids:
+            try:
+                result = self.env['prestashop.product'].import_product(self, ps_id)
+                if result:
+                    created += 1
+            except Exception as exc:
+                _logger.error('Error importando producto PS %s: %s', ps_id, exc)
+                errors += 1
+
+        self.last_products_sync = fields.Datetime.now()
+
+        parts = []
+        if created:
+            parts.append(f'{created} nuevo(s)')
+        if skipped:
+            parts.append(f'{skipped} ya importado(s)')
+        if not created and not skipped:
+            parts.append('sin cambios')
+        msg = ', '.join(parts) + '.'
+        if errors:
+            msg += f' {errors} con error (ver log).'
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Importación de productos',
+                'message': msg,
+                'type': 'warning' if errors else 'success',
+                'sticky': False,
+            },
+        }
+
     def action_import_categories(self):
         """Importa categorías de PrestaShop hacia Odoo creando bindings y product.category.
 
