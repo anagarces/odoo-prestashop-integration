@@ -72,14 +72,17 @@ class PrestashopProduct(models.Model):
         description = product.description_sale or name
         slug = self.env['prestashop.api.mixin'].prestashop_slugify(name)
         category_id = self._get_prestashop_category_id(product, config)
+        tax_group_id = config.default_tax_rules_group_id or 1
 
         product_open = f'<product><id>{self.prestashop_id}</id>' if self.prestashop_id else '<product>'
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <prestashop>
     {product_open}
+        <state>1</state>
         <active>1</active>
         <id_category_default>{category_id}</id_category_default>
+        <id_tax_rules_group>{tax_group_id}</id_tax_rules_group>
         <price>{price:.6f}</price>
         <reference>{reference}</reference>
         <minimal_quantity>1</minimal_quantity>
@@ -177,7 +180,7 @@ class PrestashopProduct(models.Model):
                     f'Sincronizado correctamente. PS ID: {ps_id}, stock: {quantity}'
                 ),
             })
-            config.last_sync = fields.Datetime.now()
+            config.last_products_sync = fields.Datetime.now()
             _logger.info(
                 'Producto %s sincronizado. PS ID: %s, stock: %s',
                 product.name,

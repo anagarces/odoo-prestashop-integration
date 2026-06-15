@@ -56,8 +56,21 @@ class PrestashopConfig(models.Model):
         default=2,
         help='ID de categoría en PrestaShop cuando el producto no tiene mapeo (2 = Inicio)'
     )
+    default_tax_rules_group_id = fields.Integer(
+        string='Grupo de IVA PrestaShop',
+        default=1,
+        help=(
+            'ID del grupo de reglas de impuesto en PrestaShop. '
+            'Consulta: Back-Office → Internacional → Impuestos → Reglas de impuesto. '
+            'Valor por defecto: 1 (IVA estándar del país)'
+        )
+    )
     last_customer_sync = fields.Datetime(
         string='Última sync clientes',
+        readonly=True,
+    )
+    last_products_sync = fields.Datetime(
+        string='Última sync productos',
         readonly=True,
     )
     last_sync = fields.Datetime(
@@ -131,6 +144,65 @@ class PrestashopConfig(models.Model):
             'tag': 'display_notification',
             'params': {
                 'title': 'Importación de clientes',
+                'message': msg,
+                'type': 'warning' if errors else 'success',
+                'sticky': False,
+            },
+        }
+
+    def action_export_products(self):
+        """Exporta productos vendibles (no servicio) de Odoo hacia PrestaShop.
+
+        Crea el binding si no existe (nuevo producto en PS) o actualiza
+        si ya fue exportado antes. Los productos de tipo servicio se omiten
+        para no exportar los fallbacks generados por la importación de pedidos.
+        """
+        self.ensure_one()
+        products = self.env['product.template'].search([
+            ('active', '=', True),
+            ('sale_ok', '=', True),
+            ('type', 'in', ['product', 'consu']),
+        ])
+
+        created, updated, errors = 0, 0, 0
+        for product in products:
+            binding = self.env['prestashop.product'].search([
+                ('config_id', '=', self.id),
+                ('odoo_product_id', '=', product.id),
+            ], limit=1)
+            is_new = not binding
+            if not binding:
+                binding = self.env['prestashop.product'].create({
+                    'config_id': self.id,
+                    'odoo_product_id': product.id,
+                })
+            try:
+                binding._sync_single_product()
+                if is_new:
+                    created += 1
+                else:
+                    updated += 1
+            except Exception as exc:
+                _logger.error('Error exportando producto "%s": %s', product.name, exc)
+                errors += 1
+
+        self.last_products_sync = fields.Datetime.now()
+
+        parts = []
+        if created:
+            parts.append(f'{created} creado(s) en PS')
+        if updated:
+            parts.append(f'{updated} actualizado(s)')
+        if not created and not updated:
+            parts.append('sin cambios')
+        msg = ', '.join(parts) + '.'
+        if errors:
+            msg += f' {errors} con error (ver log).'
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Exportación de productos',
                 'message': msg,
                 'type': 'warning' if errors else 'success',
                 'sticky': False,
