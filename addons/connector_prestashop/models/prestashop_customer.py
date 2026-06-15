@@ -6,8 +6,46 @@ from odoo.exceptions import UserError
 _logger = logging.getLogger(__name__)
 
 
+class ResPartner(models.Model):
+    """Extensión mínima de res.partner para exponer el vínculo con PS.
+
+    No altera ningún campo nativo — solo añade la relación inversa y el
+    contador necesario para el smart button en el formulario de Contacts.
+    """
+    _inherit = 'res.partner'
+
+    prestashop_customer_ids = fields.One2many(
+        comodel_name='prestashop.customer',
+        inverse_name='odoo_partner_id',
+        string='Cuentas PrestaShop',
+        readonly=True,
+    )
+    prestashop_customer_count = fields.Integer(
+        compute='_compute_prestashop_customer_count',
+        string='Cuentas PS',
+    )
+
+    @api.depends('prestashop_customer_ids')
+    def _compute_prestashop_customer_count(self):
+        for partner in self:
+            partner.prestashop_customer_count = len(partner.prestashop_customer_ids)
+
+    def action_view_prestashop_account(self):
+        """Abre los registros de cliente PS vinculados a este contacto."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Cuenta PrestaShop',
+            'res_model': 'prestashop.customer',
+            'view_mode': 'tree,form',
+            'domain': [('odoo_partner_id', '=', self.id)],
+            'context': {'default_odoo_partner_id': self.id},
+        }
+
+
 class PrestashopCustomer(models.Model):
     _name = 'prestashop.customer'
+
     _description = 'Cliente importado de PrestaShop'
 
     odoo_partner_id = fields.Many2one(
@@ -35,6 +73,11 @@ class PrestashopCustomer(models.Model):
     )
     last_sync = fields.Datetime(string='Última sync', readonly=True)
     sync_message = fields.Text(string='Último mensaje', readonly=True)
+    # Campos relacionados para mostrar en vistas sin notación de punto
+    partner_email = fields.Char(related='odoo_partner_id.email', string='Email', readonly=True)
+    partner_mobile = fields.Char(related='odoo_partner_id.mobile', string='Teléfono', readonly=True)
+    partner_street = fields.Char(related='odoo_partner_id.street', string='Dirección', readonly=True)
+    partner_city = fields.Char(related='odoo_partner_id.city', string='Ciudad', readonly=True)
 
     _sql_constraints = [
         (
@@ -43,6 +86,17 @@ class PrestashopCustomer(models.Model):
             'Ya existe un cliente con este ID de PrestaShop en esta configuración.',
         ),
     ]
+
+    def action_open_partner(self):
+        """Navega al formulario nativo del contacto Odoo vinculado."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'res.partner',
+            'res_id': self.odoo_partner_id.id,
+            'view_mode': 'form',
+            'target': 'current',
+        }
 
     @api.model
     def import_customer(self, config, ps_customer_id):
