@@ -4,13 +4,18 @@ from odoo import models
 
 _logger = logging.getLogger(__name__)
 
+# Estado PS "Enviado"
+_PS_STATE_SHIPPED = 4
+
 
 class StockPicking(models.Model):
-    """Extensión de stock.picking para sincronizar stock a PrestaShop al validar albaranes.
+    """Extensión de stock.picking para sincronizar stock y estado de pedido a PrestaShop.
 
-    Cuando state pasa a 'done', los quants ya están actualizados en la misma transacción,
-    por lo que qty_available ya refleja el stock correcto.
-    Errores de API PS nunca interrumpen la validación del albarán.
+    Cuando state pasa a 'done':
+    - Sincroniza stock de cada variante afectada.
+    - Si es una entrega saliente (outgoing) vinculada a un pedido con binding PS,
+      actualiza el estado del pedido a "Enviado" (estado 4).
+    Los errores de API PS nunca interrumpen la validación del albarán.
     """
     _inherit = 'stock.picking'
 
@@ -18,7 +23,21 @@ class StockPicking(models.Model):
         result = super().write(vals)
         if vals.get('state') == 'done':
             self._ps_sync_moved_products()
+            self._ps_push_shipped_state()
         return result
+
+    def _ps_push_shipped_state(self):
+        """Marca como Enviado en PS los pedidos cuya entrega saliente acaba de validarse."""
+        PsOrder = self.env['prestashop.order'].sudo()
+        for picking in self:
+            if picking.picking_type_code != 'outgoing':
+                continue
+            sale = getattr(picking, 'sale_id', None)
+            if not sale:
+                continue
+            binding = PsOrder.search([('odoo_order_id', '=', sale.id)], limit=1)
+            if binding and binding.prestashop_id:
+                binding._push_state_to_prestashop(_PS_STATE_SHIPPED)
 
     def _ps_sync_moved_products(self):
         """Sincroniza stock a PS para cada variante afectada por este albarán.
@@ -44,7 +63,6 @@ class StockPicking(models.Model):
         for variant in moved_variants:
             tmpl = variant.product_tmpl_id
 
-            # Intentar sync por combinación primero
             combo_binding = CombModel.search([
                 ('config_id', '=', config.id),
                 ('odoo_variant_id', '=', variant.id),
@@ -71,7 +89,6 @@ class StockPicking(models.Model):
                     )
                 continue
 
-            # Fallback: producto simple (sin combinaciones) — sync a nivel plantilla
             prod_binding = ProdModel.search([
                 ('config_id', '=', config.id),
                 ('odoo_product_id', '=', tmpl.id),

@@ -101,7 +101,7 @@ class PrestashopOrder(models.Model):
             })
 
             if ps_status in _PS_CONFIRMED_STATES:
-                sale_order.action_confirm()
+                sale_order.with_context(skip_ps_state_push=True).action_confirm()
 
             self.create({
                 'odoo_order_id': sale_order.id,
@@ -246,6 +246,44 @@ class PrestashopOrder(models.Model):
         if not partner:
             partner = self.env['res.partner'].create({'name': 'Invitado PrestaShop', 'customer_rank': 1})
         return partner
+
+    def _push_state_to_prestashop(self, ps_state_id):
+        """Envía el nuevo estado del pedido a PS creando una entrada en order_histories.
+
+        Usar order_histories (POST) es el método correcto en PS — actualiza current_state
+        y registra el cambio en el historial del pedido sin necesidad de GET+PUT del pedido completo.
+        Los errores se loguean pero nunca interrumpen el flujo de Odoo.
+        """
+        self.ensure_one()
+        if not self.prestashop_id:
+            return
+        config = self.config_id
+        xml_data = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">'
+            '<order_history>'
+            '<id_employee>0</id_employee>'
+            f'<id_order_state>{ps_state_id}</id_order_state>'
+            f'<id_order>{self.prestashop_id}</id_order>'
+            '</order_history>'
+            '</prestashop>'
+        )
+        try:
+            config.prestashop_post('order_histories', xml_data)
+            self.write({
+                'sync_state': 'synced',
+                'last_sync': fields.Datetime.now(),
+                'sync_message': f'Estado PS actualizado → {ps_state_id}.',
+            })
+            _logger.info(
+                'Pedido PS %s: estado actualizado a %s desde Odoo.',
+                self.prestashop_id, ps_state_id,
+            )
+        except Exception as exc:
+            _logger.error(
+                'Error actualizando estado PS para pedido %s (PS id %s): %s',
+                self.odoo_order_id.name, self.prestashop_id, exc,
+            )
 
     def _resolve_product(self, config, ps_product_id, product_name):
         """
