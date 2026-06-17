@@ -82,8 +82,11 @@ class PrestashopOrder(models.Model):
 
             if ps_customer_id in _PS_SYSTEM_CUSTOMER_IDS:
                 partner = self._partner_from_delivery_address(config, order_el)
+                delivery_partner = partner
             else:
                 partner = self.env['prestashop.customer'].import_customer(config, ps_customer_id)
+                delivery_partner = self._resolve_delivery_partner(config, order_el, partner)
+
             order_lines = self._parse_order_lines(config, order_el)
 
             if not order_lines:
@@ -91,6 +94,7 @@ class PrestashopOrder(models.Model):
 
             sale_order = self.env['sale.order'].create({
                 'partner_id': partner.id,
+                'partner_shipping_id': delivery_partner.id,
                 'origin': f'PrestaShop {ps_reference}',
                 'client_order_ref': ps_reference,
                 'order_line': [(0, 0, line) for line in order_lines],
@@ -135,6 +139,70 @@ class PrestashopOrder(models.Model):
                 'tax_id': [(5, 0, 0)],  # precio PS ya incluye impuestos; se limpian para no duplicar
             })
         return lines
+
+    def _resolve_delivery_partner(self, config, order_el, main_partner):
+        """Busca o crea el contacto de entrega (type='delivery') para este pedido.
+
+        Usa id_address_delivery del XML del pedido para obtener la dirección
+        real de envío. Si coincide con una ya registrada del partner la reutiliza;
+        si no, crea un contacto hijo con type='delivery'.
+        Retorna main_partner como fallback si no se puede resolver la dirección.
+        """
+        addr_id_text = (order_el.findtext('id_address_delivery') or '').strip()
+        if not addr_id_text.isdigit():
+            return main_partner
+
+        try:
+            resp = config.prestashop_get(f'addresses/{addr_id_text}')
+            root = config.prestashop_parse_xml(resp.text)
+            addr_el = root.find('.//address')
+            if addr_el is None:
+                return main_partner
+
+            firstname = (addr_el.findtext('firstname') or '').strip()
+            lastname = (addr_el.findtext('lastname') or '').strip()
+            street = (addr_el.findtext('address1') or '').strip()
+            street2 = (addr_el.findtext('address2') or '').strip()
+            city = (addr_el.findtext('city') or '').strip()
+            postcode = (addr_el.findtext('postcode') or '').strip()
+            phone = (
+                addr_el.findtext('phone_mobile') or addr_el.findtext('phone') or ''
+            ).strip()
+
+            if not street and not city:
+                return main_partner
+
+            # Reutilizar si ya existe una dirección de entrega con la misma calle
+            existing = self.env['res.partner'].search([
+                ('parent_id', '=', main_partner.id),
+                ('type', '=', 'delivery'),
+                ('street', '=', street),
+            ], limit=1)
+            if existing:
+                return existing
+
+            name = f'{firstname} {lastname}'.strip() or main_partner.name
+            vals = {
+                'name': name,
+                'parent_id': main_partner.id,
+                'type': 'delivery',
+                'street': street,
+                'city': city,
+            }
+            if street2:
+                vals['street2'] = street2
+            if postcode:
+                vals['zip'] = postcode
+            if phone:
+                vals['mobile'] = phone
+
+            return self.env['res.partner'].create(vals)
+
+        except Exception as exc:
+            _logger.warning(
+                'No se pudo resolver dirección de entrega %s: %s', addr_id_text, exc,
+            )
+            return main_partner
 
     def _partner_from_delivery_address(self, config, order_el):
         """

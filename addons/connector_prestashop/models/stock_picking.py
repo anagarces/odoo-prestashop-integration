@@ -22,8 +22,14 @@ class StockPicking(models.Model):
         return result
 
     def _ps_sync_moved_products(self):
-        """Actualiza el stock en PS para cada producto con binding afectado por este albarán."""
-        config = self.env['prestashop.config'].search([
+        """Actualiza el stock en PS para cada producto con binding afectado por este albarán.
+
+        Ejecuta las consultas a modelos PS en sudo para que usuarios de almacén
+        sin acceso de gestor puedan validar albaranes sin errores de permisos.
+        La clave API de PS nunca queda expuesta al usuario que valida.
+        """
+        sudo_env = self.env['prestashop.config'].sudo()
+        config = sudo_env.search([
             ('active', '=', True),
             ('state', '=', 'connected'),
         ], limit=1)
@@ -34,7 +40,7 @@ class StockPicking(models.Model):
         if not product_tmpls:
             return
 
-        bindings = self.env['prestashop.product'].search([
+        bindings = self.env['prestashop.product'].sudo().search([
             ('config_id', '=', config.id),
             ('odoo_product_id', 'in', product_tmpls.ids),
             ('prestashop_id', '>', 0),
