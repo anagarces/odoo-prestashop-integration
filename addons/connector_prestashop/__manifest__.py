@@ -18,6 +18,7 @@
         'base',
         'product',
         'stock',
+        'sales_team',
         'sale',
         'account',
     ],
