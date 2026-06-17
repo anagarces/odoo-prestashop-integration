@@ -6,8 +6,46 @@ from odoo.exceptions import UserError
 _logger = logging.getLogger(__name__)
 
 
+class ResPartner(models.Model):
+    """Extensión mínima de res.partner para exponer el vínculo con PS.
+
+    No altera ningún campo nativo — solo añade la relación inversa y el
+    contador necesario para el smart button en el formulario de Contacts.
+    """
+    _inherit = 'res.partner'
+
+    prestashop_customer_ids = fields.One2many(
+        comodel_name='prestashop.customer',
+        inverse_name='odoo_partner_id',
+        string='Cuentas PrestaShop',
+        readonly=True,
+    )
+    prestashop_customer_count = fields.Integer(
+        compute='_compute_prestashop_customer_count',
+        string='Cuentas PS',
+    )
+
+    @api.depends('prestashop_customer_ids')
+    def _compute_prestashop_customer_count(self):
+        for partner in self:
+            partner.prestashop_customer_count = len(partner.prestashop_customer_ids)
+
+    def action_view_prestashop_account(self):
+        """Abre los registros de cliente PS vinculados a este contacto."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Cuenta PrestaShop',
+            'res_model': 'prestashop.customer',
+            'view_mode': 'tree,form',
+            'domain': [('odoo_partner_id', '=', self.id)],
+            'context': {'default_odoo_partner_id': self.id},
+        }
+
+
 class PrestashopCustomer(models.Model):
     _name = 'prestashop.customer'
+
     _description = 'Cliente importado de PrestaShop'
 
     odoo_partner_id = fields.Many2one(
@@ -35,6 +73,11 @@ class PrestashopCustomer(models.Model):
     )
     last_sync = fields.Datetime(string='Última sync', readonly=True)
     sync_message = fields.Text(string='Último mensaje', readonly=True)
+    # Campos relacionados para mostrar en vistas sin notación de punto
+    partner_email = fields.Char(related='odoo_partner_id.email', string='Email', readonly=True)
+    partner_mobile = fields.Char(related='odoo_partner_id.mobile', string='Teléfono', readonly=True)
+    partner_street = fields.Char(related='odoo_partner_id.street', string='Dirección', readonly=True)
+    partner_city = fields.Char(related='odoo_partner_id.city', string='Ciudad', readonly=True)
 
     _sql_constraints = [
         (
@@ -43,6 +86,17 @@ class PrestashopCustomer(models.Model):
             'Ya existe un cliente con este ID de PrestaShop en esta configuración.',
         ),
     ]
+
+    def action_open_partner(self):
+        """Navega al formulario nativo del contacto Odoo vinculado."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'res.partner',
+            'res_id': self.odoo_partner_id.id,
+            'view_mode': 'form',
+            'target': 'current',
+        }
 
     @api.model
     def import_customer(self, config, ps_customer_id):
@@ -62,6 +116,7 @@ class PrestashopCustomer(models.Model):
             firstname = (customer_el.findtext('firstname') or '').strip()
             lastname = (customer_el.findtext('lastname') or '').strip()
             email = (customer_el.findtext('email') or '').strip()
+            is_guest = customer_el.findtext('is_guest') == '1'
             name = f'{firstname} {lastname}'.strip() or email or f'Cliente PS {ps_customer_id}'
 
             partner_vals = self._fetch_partner_vals(config, ps_customer_id, name, email)
@@ -73,7 +128,10 @@ class PrestashopCustomer(models.Model):
                     'last_sync': fields.Datetime.now(),
                     'sync_message': 'Actualizado desde PrestaShop.',
                 })
-                return binding.odoo_partner_id
+                partner = binding.odoo_partner_id
+                if is_guest:
+                    self._apply_guest_tag(partner)
+                return partner
 
             # Evitar duplicados buscando por email
             partner = (
@@ -84,6 +142,9 @@ class PrestashopCustomer(models.Model):
                 partner.write(partner_vals)
             else:
                 partner = self.env['res.partner'].create(partner_vals)
+
+            if is_guest:
+                self._apply_guest_tag(partner)
 
             self.create({
                 'odoo_partner_id': partner.id,
@@ -100,6 +161,14 @@ class PrestashopCustomer(models.Model):
             if binding:
                 binding.write({'sync_state': 'error', 'sync_message': 'Error al sincronizar.'})
             raise
+
+    def _apply_guest_tag(self, partner):
+        """Añade la etiqueta 'Invitado PS' al partner si no la tiene ya."""
+        tag = self.env['res.partner.category'].search([('name', '=', 'Invitado PS')], limit=1)
+        if not tag:
+            tag = self.env['res.partner.category'].create({'name': 'Invitado PS'})
+        if tag not in partner.category_id:
+            partner.write({'category_id': [(4, tag.id)]})
 
     def _fetch_partner_vals(self, config, ps_customer_id, name, email):
         """Construye los valores de res.partner enriquecidos con la dirección de PS."""

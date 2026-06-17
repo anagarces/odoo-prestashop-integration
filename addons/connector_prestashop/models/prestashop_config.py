@@ -455,6 +455,256 @@ class PrestashopConfig(models.Model):
             },
         }
 
+    @api.model
+    def _cron_import_orders(self):
+        """Llamado por el cron 'PrestaShop: Importar pedidos nuevos' cada 30 min.
+
+        Si no hay configuración activa y conectada, registra un aviso y termina
+        sin lanzar excepción para no interrumpir el scheduler de Odoo.
+        """
+        configs = self.search([('active', '=', True), ('state', '=', 'connected')])
+        if not configs:
+            _logger.warning('Cron import_orders: no hay configuración PS activa y conectada.')
+            return
+        for config in configs:
+            try:
+                config.action_import_orders()
+            except Exception as exc:
+                _logger.error(
+                    'Cron import_orders — error en config "%s": %s', config.name, exc
+                )
+
+    @api.model
+    def _cron_sync_order_states(self):
+        """Llamado por el cron 'PrestaShop: Sincronizar estados de pedidos' cada 6 h.
+
+        Detecta pedidos cancelados/reembolsados en PS que siguen activos en Odoo.
+        """
+        configs = self.search([('active', '=', True), ('state', '=', 'connected')])
+        if not configs:
+            _logger.warning('Cron sync_order_states: no hay configuración PS activa y conectada.')
+            return
+        for config in configs:
+            try:
+                config.action_sync_order_states()
+            except Exception as exc:
+                _logger.error(
+                    'Cron sync_order_states — error en config "%s": %s', config.name, exc
+                )
+
+    def action_sync_order_states(self):
+        """Comprueba si pedidos ya importados han cambiado de estado en PrestaShop.
+
+        Optimización: una sola llamada API trae todos los estados en batch.
+        Cancela automáticamente en Odoo los pedidos que PS marcó como cancelado (6),
+        reembolsado (7) o error de pago (8). Si el pedido tiene facturas confirmadas
+        o entregas cerradas, lo marca para revisión manual con instrucciones claras.
+        """
+        self.ensure_one()
+
+        _PS_SKIP_STATES = frozenset({6, 7, 8})
+        _PS_STATE_LABELS = {6: 'Cancelado', 7: 'Reembolsado', 8: 'Error de pago'}
+
+        # 1. Una sola query DB: bindings con pedidos Odoo aún activos
+        bindings = self.env['prestashop.order'].search([
+            ('config_id', '=', self.id),
+            ('odoo_order_id.state', 'in', ['draft', 'sale', 'done']),
+        ])
+
+        if not bindings:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Sincronización de estados',
+                    'message': 'No hay pedidos activos en Odoo que verificar.',
+                    'type': 'info',
+                    'sticky': False,
+                },
+            }
+
+        # 2. Una sola llamada API (o pocas si hay muchos pedidos): estados actuales de PS
+        ps_ids = bindings.mapped('prestashop_id')
+        ps_states = self._fetch_ps_order_states(ps_ids)
+
+        # 3. Procesar cada binding comparando estado PS vs Odoo
+        auto_cancelled = 0
+        blocked_invoices = []   # [(referencia, nombres_facturas)]
+        blocked_done = []       # [referencia]
+        not_found = 0
+        errors = 0
+
+        for binding in bindings:
+            ps_state = ps_states.get(binding.prestashop_id)
+            sale_order = binding.odoo_order_id
+            ref = binding.prestashop_reference or f'PS{binding.prestashop_id}'
+
+            if ps_state is None:
+                not_found += 1
+                binding.write({
+                    'sync_state': 'error',
+                    'sync_message': (
+                        'Pedido no encontrado en PrestaShop. '
+                        'Puede haber sido eliminado directamente en la base de datos de PS.'
+                    ),
+                })
+                continue
+
+            if ps_state not in _PS_SKIP_STATES:
+                continue  # Estado válido en PS — sin cambios necesarios
+
+            state_label = _PS_STATE_LABELS.get(ps_state, f'Estado {ps_state}')
+
+            # Pedido en 'done': entregado y cerrado en Odoo — requiere intervención manual
+            if sale_order.state == 'done':
+                blocked_done.append(ref)
+                binding.write({
+                    'sync_state': 'error',
+                    'sync_message': (
+                        f'Estado en PrestaShop: {state_label}. '
+                        f'El pedido {sale_order.name} está bloqueado en Odoo (entregado/cerrado). '
+                        f'Acción requerida: ve a Ventas → {sale_order.name}, '
+                        f'cancela los albaranes vinculados y luego cancela el pedido manualmente.'
+                    ),
+                })
+                continue
+
+            # Pedido 'sale' con facturas confirmadas — hay que rectificar antes de cancelar
+            if sale_order.state == 'sale':
+                posted_invoices = sale_order.invoice_ids.filtered(
+                    lambda inv: inv.state == 'posted'
+                )
+                if posted_invoices:
+                    invoice_names = ', '.join(posted_invoices.mapped('name'))
+                    blocked_invoices.append((ref, invoice_names))
+                    binding.write({
+                        'sync_state': 'error',
+                        'sync_message': (
+                            f'Estado en PrestaShop: {state_label}. '
+                            f'No se puede cancelar automáticamente: '
+                            f'el pedido {sale_order.name} tiene facturas confirmadas '
+                            f'({invoice_names}). '
+                            f'Acción requerida: ve a Facturación, crea una nota de crédito '
+                            f'(rectificativa) por cada factura y luego cancela el pedido '
+                            f'desde Ventas → {sale_order.name}.'
+                        ),
+                    })
+                    continue
+
+            # Cancelación automática: 'draft' o 'sale' sin facturas confirmadas
+            try:
+                sale_order.action_cancel()
+                auto_cancelled += 1
+                binding.write({
+                    'sync_state': 'synced',
+                    'sync_message': (
+                        f'Cancelado automáticamente. Motivo: {state_label} en PrestaShop.'
+                    ),
+                })
+                _logger.info(
+                    'Pedido %s (PS %s) cancelado en Odoo — estado PS: %s',
+                    sale_order.name, binding.prestashop_id, state_label,
+                )
+            except Exception as exc:
+                errors += 1
+                binding.write({
+                    'sync_state': 'error',
+                    'sync_message': f'Error al intentar cancelar: {exc}',
+                })
+                _logger.error(
+                    'Error cancelando pedido %s (PS %s): %s',
+                    sale_order.name, binding.prestashop_id, exc,
+                )
+
+        return self._build_sync_states_notification(
+            auto_cancelled, blocked_invoices, blocked_done, not_found, errors
+        )
+
+    def _fetch_ps_order_states(self, ps_ids):
+        """Obtiene el estado actual de varios pedidos PS en una sola llamada API por batch.
+
+        Usa display=[id,current_state] para minimizar el payload.
+        Agrupa en lotes de 50 para evitar URLs demasiado largas.
+        """
+        if not ps_ids:
+            return {}
+
+        BATCH_SIZE = 50
+        ps_states = {}
+
+        for i in range(0, len(ps_ids), BATCH_SIZE):
+            batch = ps_ids[i:i + BATCH_SIZE]
+            ids_filter = '|'.join(str(pid) for pid in batch)
+            try:
+                response = self.prestashop_get('orders', params={
+                    'filter[id]': f'[{ids_filter}]',
+                    'display': '[id,current_state]',
+                })
+                root = self.prestashop_parse_xml(response.text)
+                for order_el in root.findall('.//order'):
+                    ps_id_text = order_el.findtext('id')
+                    state_text = order_el.findtext('current_state')
+                    if ps_id_text and state_text:
+                        ps_states[int(ps_id_text)] = int(state_text)
+            except Exception as exc:
+                _logger.error(
+                    'Error consultando estados PS (lote %d): %s',
+                    i // BATCH_SIZE + 1, exc,
+                )
+
+        return ps_states
+
+    def _build_sync_states_notification(
+        self, auto_cancelled, blocked_invoices, blocked_done, not_found, errors
+    ):
+        """Construye la notificación de resultado de la sincronización de estados."""
+        parts = []
+        has_warnings = False
+
+        if auto_cancelled:
+            parts.append(f'{auto_cancelled} pedido(s) cancelado(s) automáticamente.')
+
+        if blocked_invoices:
+            has_warnings = True
+            refs = ', '.join(ref for ref, _ in blocked_invoices)
+            parts.append(
+                f'{len(blocked_invoices)} pedido(s) con facturas confirmadas requieren '
+                f'nota de crédito manual antes de cancelar: {refs}. '
+                f'Ver detalle en cada pedido de la lista Pedidos PrestaShop.'
+            )
+
+        if blocked_done:
+            has_warnings = True
+            parts.append(
+                f'{len(blocked_done)} pedido(s) entregados requieren cancelación manual '
+                f'(cancela primero los albaranes): {", ".join(blocked_done)}.'
+            )
+
+        if not_found:
+            has_warnings = True
+            parts.append(
+                f'{not_found} pedido(s) no encontrados en PrestaShop '
+                f'(posiblemente eliminados). Ver detalle en lista de pedidos.'
+            )
+
+        if errors:
+            has_warnings = True
+            parts.append(f'{errors} error(es) inesperado(s) al cancelar. Consulta el log del servidor.')
+
+        if not parts:
+            parts.append('Todos los pedidos están sincronizados con PrestaShop. Sin cambios.')
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Sincronización de estados de pedidos',
+                'message': ' '.join(parts),
+                'type': 'warning' if has_warnings else 'success',
+                'sticky': has_warnings,  # permanece visible si hay acciones pendientes
+            },
+        }
+
     def test_connection(self):
         """Prueba la conexión con PrestaShop y detecta el idioma por defecto."""
         self.ensure_one()

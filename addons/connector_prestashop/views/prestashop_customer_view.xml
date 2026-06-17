@@ -6,13 +6,15 @@
         <field name="model">prestashop.customer</field>
         <field name="arch" type="xml">
             <tree string="Clientes PrestaShop"
+                  create="0"
                   decoration-success="sync_state == 'synced'"
                   decoration-danger="sync_state == 'error'">
                 <field name="prestashop_id" string="ID PS"/>
-                <field name="odoo_partner_id"/>
-                <field name="config_id"/>
-                <field name="sync_state"/>
-                <field name="last_sync"/>
+                <field name="odoo_partner_id" string="Contacto Odoo"/>
+                <field name="partner_email" string="Email" optional="show"/>
+                <field name="partner_mobile" string="Teléfono" optional="show"/>
+                <field name="sync_state" string="Estado"/>
+                <field name="last_sync" optional="hide"/>
             </tree>
         </field>
     </record>
@@ -21,15 +23,33 @@
         <field name="name">prestashop.customer.form</field>
         <field name="model">prestashop.customer</field>
         <field name="arch" type="xml">
-            <form string="Cliente PrestaShop">
+            <form string="Cliente PrestaShop" create="0">
+                <header>
+                    <field name="sync_state" widget="statusbar"/>
+                </header>
                 <sheet>
-                    <group string="Cliente">
-                        <field name="prestashop_id"/>
-                        <field name="odoo_partner_id"/>
+                    <div class="oe_button_box" name="button_box">
+                        <button type="object"
+                                name="action_open_partner"
+                                class="oe_stat_button"
+                                icon="fa-user">
+                            <div class="o_field_widget o_stat_info">
+                                <span class="o_stat_text">Ver Contacto</span>
+                            </div>
+                        </button>
+                    </div>
+                    <group string="Vínculo Odoo ↔ PrestaShop">
+                        <field name="prestashop_id" string="ID en PrestaShop"/>
+                        <field name="odoo_partner_id" string="Contacto Odoo"/>
                         <field name="config_id"/>
                     </group>
+                    <group string="Datos del contacto">
+                        <field name="partner_email"/>
+                        <field name="partner_mobile"/>
+                        <field name="partner_street"/>
+                        <field name="partner_city"/>
+                    </group>
                     <group string="Sincronización">
-                        <field name="sync_state"/>
                         <field name="last_sync"/>
                         <field name="sync_message"/>
                     </group>

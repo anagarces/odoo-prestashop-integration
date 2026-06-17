@@ -7,6 +7,10 @@ _logger = logging.getLogger(__name__)
 
 # Estados de PS que equivalen a pedido confirmado en Odoo
 _PS_CONFIRMED_STATES = frozenset({2, 3, 4, 5})
+# Estados que NO deben importarse (cancelado, reembolsado, error de pago)
+_PS_SKIP_STATES = frozenset({6, 7, 8})
+# IDs de cuentas sistema PS (Anonymous GDPR, John DOE demo) — no son compradores reales
+_PS_SYSTEM_CUSTOMER_IDS = frozenset({1, 2})
 
 
 class PrestashopOrder(models.Model):
@@ -69,7 +73,17 @@ class PrestashopOrder(models.Model):
             ps_customer_id = int(order_el.findtext('id_customer') or 0)
             ps_status = int(order_el.findtext('current_state') or 0)
 
-            partner = self.env['prestashop.customer'].import_customer(config, ps_customer_id)
+            if ps_status in _PS_SKIP_STATES:
+                _logger.info(
+                    'Pedido PS %s omitido — estado %s (cancelado/reembolsado/error).',
+                    ps_order_id, ps_status,
+                )
+                return None
+
+            if ps_customer_id in _PS_SYSTEM_CUSTOMER_IDS:
+                partner = self._partner_from_delivery_address(config, order_el)
+            else:
+                partner = self.env['prestashop.customer'].import_customer(config, ps_customer_id)
             order_lines = self._parse_order_lines(config, order_el)
 
             if not order_lines:
@@ -121,6 +135,49 @@ class PrestashopOrder(models.Model):
                 'tax_id': [(5, 0, 0)],  # precio PS ya incluye impuestos; se limpian para no duplicar
             })
         return lines
+
+    def _partner_from_delivery_address(self, config, order_el):
+        """
+        Construye o reutiliza un res.partner desde la dirección de entrega del pedido.
+        Se usa cuando el id_customer pertenece a una cuenta sistema PS (Anonymous/John DOE).
+        """
+        addr_id_text = (order_el.findtext('id_address_delivery') or '').strip()
+        if addr_id_text.isdigit():
+            try:
+                resp = config.prestashop_get(f'addresses/{addr_id_text}')
+                root = config.prestashop_parse_xml(resp.text)
+                addr_el = root.find('.//address')
+                if addr_el is not None:
+                    firstname = (addr_el.findtext('firstname') or '').strip()
+                    lastname = (addr_el.findtext('lastname') or '').strip()
+                    name = f'{firstname} {lastname}'.strip()
+                    phone = (addr_el.findtext('phone_mobile') or addr_el.findtext('phone') or '').strip()
+                    street = (addr_el.findtext('address1') or '').strip()
+                    city = (addr_el.findtext('city') or '').strip()
+                    postcode = (addr_el.findtext('postcode') or '').strip()
+
+                    if name:
+                        partner = self.env['res.partner'].search([('name', '=', name)], limit=1)
+                        if partner:
+                            return partner
+                        vals = {'name': name, 'customer_rank': 1}
+                        if phone:
+                            vals['mobile'] = phone
+                        if street:
+                            vals['street'] = street
+                        if city:
+                            vals['city'] = city
+                        if postcode:
+                            vals['zip'] = postcode
+                        return self.env['res.partner'].create(vals)
+            except Exception as exc:
+                _logger.warning('No se pudo obtener dirección de entrega %s: %s', addr_id_text, exc)
+
+        # Fallback: partner genérico compartido para pedidos sin datos de comprador
+        partner = self.env['res.partner'].search([('name', '=', 'Invitado PrestaShop')], limit=1)
+        if not partner:
+            partner = self.env['res.partner'].create({'name': 'Invitado PrestaShop', 'customer_rank': 1})
+        return partner
 
     def _resolve_product(self, config, ps_product_id, product_name):
         """

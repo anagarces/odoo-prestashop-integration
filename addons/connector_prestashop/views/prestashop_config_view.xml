@@ -33,6 +33,10 @@
                             string="Importar Pedidos"
                             type="object"
                             invisible="state != 'connected'"/>
+                    <button name="action_sync_order_states"
+                            string="Sincronizar Estados"
+                            type="object"
+                            invisible="state != 'connected'"/>
                     <field name="state" widget="statusbar"/>
                 </header>
                 <sheet>
