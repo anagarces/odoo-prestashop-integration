@@ -1,10 +1,12 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_prestashop_config,prestashop.config,model_prestashop_config,sale.group_sale_manager,1,1,1,1
-access_prestashop_category,prestashop.category,model_prestashop_category,sale.group_sale_manager,1,1,1,1
+access_prestashop_config,prestashop.config,model_prestashop_config,sales_team.group_sale_manager,1,1,1,1
+access_prestashop_category,prestashop.category,model_prestashop_category,sales_team.group_sale_manager,1,1,1,1
 access_prestashop_category_readonly,prestashop.category readonly,model_prestashop_category,base.group_user,1,0,0,0
-access_prestashop_product,prestashop.product,model_prestashop_product,sale.group_sale_manager,1,1,1,1
+access_prestashop_product,prestashop.product,model_prestashop_product,sales_team.group_sale_manager,1,1,1,1
 access_prestashop_product_readonly,prestashop.product readonly,model_prestashop_product,base.group_user,1,0,0,0
-access_prestashop_customer,prestashop.customer,model_prestashop_customer,sale.group_sale_manager,1,1,1,1
+access_prestashop_customer,prestashop.customer,model_prestashop_customer,sales_team.group_sale_manager,1,1,1,1
 access_prestashop_customer_readonly,prestashop.customer readonly,model_prestashop_customer,base.group_user,1,0,0,0
-access_prestashop_order,prestashop.order,model_prestashop_order,sale.group_sale_manager,1,1,1,1
+access_prestashop_order,prestashop.order,model_prestashop_order,sales_team.group_sale_manager,1,1,1,1
 access_prestashop_order_readonly,prestashop.order readonly,model_prestashop_order,base.group_user,1,0,0,0
+access_prestashop_product_combination,prestashop.product.combination,model_prestashop_product_combination,sales_team.group_sale_manager,1,1,1,1
+access_prestashop_product_combination_readonly,prestashop.product.combination readonly,model_prestashop_product_combination,base.group_user,1,0,0,0

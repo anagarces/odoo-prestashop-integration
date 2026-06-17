@@ -29,6 +29,22 @@
                         <field name="last_sync"/>
                         <field name="sync_message"/>
                     </group>
+                    <notebook>
+                        <page string="Combinaciones" name="combinations">
+                            <field name="combination_ids" readonly="1">
+                                <tree string="Combinaciones sincronizadas" create="0" delete="0">
+                                    <field name="prestashop_combination_id" string="ID PS"/>
+                                    <field name="odoo_variant_id" string="Variante Odoo"/>
+                                    <field name="sync_state"
+                                           string="Estado"
+                                           decoration-success="sync_state == 'synced'"
+                                           decoration-danger="sync_state == 'error'"/>
+                                    <field name="last_sync" string="Última sync"/>
+                                    <field name="sync_message" string="Mensaje"/>
+                                </tree>
+                            </field>
+                        </page>
+                    </notebook>
                 </sheet>
             </form>
         </field>
