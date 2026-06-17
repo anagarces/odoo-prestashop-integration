@@ -116,6 +116,7 @@ class PrestashopCustomer(models.Model):
             firstname = (customer_el.findtext('firstname') or '').strip()
             lastname = (customer_el.findtext('lastname') or '').strip()
             email = (customer_el.findtext('email') or '').strip()
+            is_guest = customer_el.findtext('is_guest') == '1'
             name = f'{firstname} {lastname}'.strip() or email or f'Cliente PS {ps_customer_id}'
 
             partner_vals = self._fetch_partner_vals(config, ps_customer_id, name, email)
@@ -127,7 +128,10 @@ class PrestashopCustomer(models.Model):
                     'last_sync': fields.Datetime.now(),
                     'sync_message': 'Actualizado desde PrestaShop.',
                 })
-                return binding.odoo_partner_id
+                partner = binding.odoo_partner_id
+                if is_guest:
+                    self._apply_guest_tag(partner)
+                return partner
 
             # Evitar duplicados buscando por email
             partner = (
@@ -138,6 +142,9 @@ class PrestashopCustomer(models.Model):
                 partner.write(partner_vals)
             else:
                 partner = self.env['res.partner'].create(partner_vals)
+
+            if is_guest:
+                self._apply_guest_tag(partner)
 
             self.create({
                 'odoo_partner_id': partner.id,
@@ -154,6 +161,14 @@ class PrestashopCustomer(models.Model):
             if binding:
                 binding.write({'sync_state': 'error', 'sync_message': 'Error al sincronizar.'})
             raise
+
+    def _apply_guest_tag(self, partner):
+        """Añade la etiqueta 'Invitado PS' al partner si no la tiene ya."""
+        tag = self.env['res.partner.category'].search([('name', '=', 'Invitado PS')], limit=1)
+        if not tag:
+            tag = self.env['res.partner.category'].create({'name': 'Invitado PS'})
+        if tag not in partner.category_id:
+            partner.write({'category_id': [(4, tag.id)]})
 
     def _fetch_partner_vals(self, config, ps_customer_id, name, email):
         """Construye los valores de res.partner enriquecidos con la dirección de PS."""

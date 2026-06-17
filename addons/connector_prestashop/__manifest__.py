@@ -23,6 +23,7 @@
     ],
     'data': [
         'security/ir.model.access.csv',
+        'data/cron.xml',
         'views/prestashop_config_view.xml',
         'views/prestashop_category_view.xml',
         'views/prestashop_product_view.xml',
