@@ -65,6 +65,16 @@ class PrestashopConfig(models.Model):
             'Valor por defecto: 1 (IVA estándar del país)'
         )
     )
+    default_sale_tax_id = fields.Many2one(
+        comodel_name='account.tax',
+        string='IVA por defecto (pedidos PS)',
+        domain=[('type_tax_use', 'in', ('sale', 'all')), ('active', '=', True)],
+        help=(
+            'Impuesto de venta que se aplica cuando no se puede deducir el tipo '
+            'automáticamente desde los precios de PrestaShop. '
+            'Ejemplo: IVA 21% (España). Si no se configura, las líneas quedan sin impuesto.'
+        ),
+    )
     last_customer_sync = fields.Datetime(
         string='Última sync clientes',
         readonly=True,
