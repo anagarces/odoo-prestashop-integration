@@ -131,14 +131,65 @@ class PrestashopOrder(models.Model):
             price = float(row.findtext('unit_price_tax_excl') or 0.0)
 
             product = self._resolve_product(config, ps_product_id, product_name)
+            tax_cmd = self._resolve_order_line_tax(config, row, product)
             lines.append({
                 'product_id': product.id,
                 'name': product_name,
                 'product_uom_qty': qty,
                 'price_unit': price,
-                'tax_id': [(5, 0, 0)],  # precio PS ya incluye impuestos; se limpian para no duplicar
+                'tax_id': tax_cmd,
             })
         return lines
+
+    def _resolve_order_line_tax(self, config, row_el, product):
+        """Resuelve el account.tax de venta para una línea de pedido importada de PS.
+
+        Estrategia (en orden de prioridad):
+        1. Derivar el tipo desde unit_price_tax_incl / unit_price_tax_excl → buscar tax en Odoo.
+        2. Usar los taxes_id configurados en el producto Odoo.
+        3. Usar el impuesto por defecto definido en prestashop.config.
+        4. Sin impuesto (fallback final, deja log de aviso).
+        """
+        price_excl = float(row_el.findtext('unit_price_tax_excl') or 0)
+        price_incl = float(row_el.findtext('unit_price_tax_incl') or 0)
+
+        # 1. Tipo calculado desde precios PS
+        if price_excl > 0.001 and price_incl > price_excl:
+            rate = round((price_incl / price_excl - 1) * 100, 1)
+            tax = self.env['account.tax'].search([
+                ('type_tax_use', 'in', ('sale', 'all')),
+                ('amount_type', '=', 'percent'),
+                ('amount', '=', rate),
+                ('active', '=', True),
+            ], limit=1)
+            if tax:
+                _logger.debug('Impuesto resuelto por tipo PS (%.1f%%): %s', rate, tax.name)
+                return [(6, 0, tax.ids)]
+            _logger.warning(
+                'Tipo IVA %.1f%% derivado de PS no encontrado en Odoo — usando fallback.',
+                rate,
+            )
+
+        # 2. Impuestos del producto Odoo
+        product_taxes = product.taxes_id.filtered(
+            lambda t: t.type_tax_use in ('sale', 'all') and t.active
+        )
+        if product_taxes:
+            _logger.debug('Impuesto resuelto desde producto "%s": %s', product.name, product_taxes.mapped('name'))
+            return [(6, 0, product_taxes.ids)]
+
+        # 3. Impuesto por defecto de la configuración
+        if config.default_sale_tax_id:
+            _logger.debug('Impuesto resuelto desde config por defecto: %s', config.default_sale_tax_id.name)
+            return [(6, 0, config.default_sale_tax_id.ids)]
+
+        # 4. Sin impuesto
+        _logger.warning(
+            'No se pudo resolver impuesto para línea "%s" — quedará sin IVA. '
+            'Configura un impuesto por defecto en Configuración PrestaShop.',
+            product.name,
+        )
+        return [(5, 0, 0)]
 
     def _resolve_delivery_partner(self, config, order_el, main_partner):
         """Busca o crea el contacto de entrega (type='delivery') para este pedido.

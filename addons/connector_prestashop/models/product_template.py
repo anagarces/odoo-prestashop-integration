@@ -1,5 +1,12 @@
+import logging
+
 from odoo import models, fields
 from odoo.exceptions import UserError
+
+_logger = logging.getLogger(__name__)
+
+# Campos cuyo cambio debe propagarse a PrestaShop si el producto tiene binding activo
+_PS_WATCHED_FIELDS = frozenset({'name', 'list_price', 'description_sale', 'default_code', 'categ_id'})
 
 
 class ProductTemplate(models.Model):
@@ -32,6 +39,24 @@ class ProductTemplate(models.Model):
                 product.prestashop_sync_state = 'synced'
             else:
                 product.prestashop_sync_state = 'pending'
+
+    def write(self, vals):
+        result = super().write(vals)
+        if _PS_WATCHED_FIELDS & vals.keys():
+            PsProduct = self.env['prestashop.product'].sudo()
+            for product in self:
+                bindings = PsProduct.search([
+                    ('odoo_product_id', '=', product.id),
+                    ('prestashop_id', '>', 0),
+                ])
+                for binding in bindings:
+                    try:
+                        binding._sync_single_product()
+                    except Exception as exc:
+                        _logger.error(
+                            'Auto-sync PS falló para "%s": %s', product.name, exc,
+                        )
+        return result
 
     def action_sync_to_prestashop(self):
         """Crea el vínculo si no existe y sincroniza el producto a PrestaShop."""

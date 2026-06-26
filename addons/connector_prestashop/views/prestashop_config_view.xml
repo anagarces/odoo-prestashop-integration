@@ -50,6 +50,7 @@
                         <field name="default_lang_id"/>
                         <field name="default_category_ps_id"/>
                         <field name="default_tax_rules_group_id"/>
+                        <field name="default_sale_tax_id"/>
                     </group>
                     <group string="Última sincronización">
                         <field name="last_products_sync"/>
